@@ -10,7 +10,7 @@ function LayoutPrincipal() {
         <ul>
           <li><Link to="/dashboard">Dashboard</Link></li>
           <li><Link to="/asistencia">Asistencia</Link></li>
-          <li><Link to="/tareas">Tareas y calificaciones</Link></li>
+          <li><Link to="/calificaciones">Tareas y calificaciones</Link></li>
         </ul>
       </nav>
 

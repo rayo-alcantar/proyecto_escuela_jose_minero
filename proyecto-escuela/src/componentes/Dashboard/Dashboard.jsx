@@ -1,32 +1,50 @@
 import { useState, useEffect } from "react";
-import apiService from "../../services/apiService";
+import taskService from "../../services/taskService";
+import studentService from "../../services/studentService";
+import groupService from "../../services/groupService";
+import subjectService from "../../services/subjectService";
+import reportService from "../../services/reportService";
 import "./Dashboard.css";
-import LayoutPrincipal from "../LayoutPrincipal/LayoutPrincipal";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
-    tareas: 0,
-    alumnos: 0,
-    proximos: 0,
+    tareas: '-',
+    alumnos: '-',
+    grupos: '-',
+    materias: '-',
   });
+  const [defaultGroupId, setDefaultGroupId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [generatingReport, setGeneratingReport] = useState(false);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Obtener datos de diferentes endpoints
-        const [tasksResponse, studentsResponse] = await Promise.all([
-          apiService.get('/api/tasks'),
-          apiService.get('/api/students'),
+        const tasksPromise = taskService.getTasks().catch(() => ({ data: [] }));
+        const studentsPromise = studentService.getStudents().catch(() => ({ data: [] }));
+        const groupsPromise = groupService.getGroups().catch(() => ({ data: [] }));
+        const subjectsPromise = subjectService.getSubjects().catch(() => ({ data: [] }));
+
+        const [tasksResponse, studentsResponse, groupsResponse, subjectsResponse] = await Promise.all([
+          tasksPromise,
+          studentsPromise,
+          groupsPromise,
+          subjectsPromise,
         ]);
+
+        const groupsData = groupsResponse.data || [];
+        if (groupsData.length > 0) {
+          setDefaultGroupId(groupsData[0]._id);
+        }
 
         setStats({
           tareas: tasksResponse.data?.length || 0,
           alumnos: studentsResponse.data?.length || 0,
-          proximos: 12, // Esto podría venir de otro endpoint
+          grupos: groupsData.length,
+          materias: subjectsResponse.data?.length || 0,
         });
-      } catch (error) {
-        console.error('Error al cargar estadísticas:', error);
+      } catch (err) {
+        console.error('Error al cargar estadísticas:', err);
       } finally {
         setLoading(false);
       }
@@ -35,8 +53,44 @@ export default function Dashboard() {
     fetchStats();
   }, []);
 
+  const handleGenerateReport = async () => {
+    if (!defaultGroupId) {
+      alert('Primero crea al menos un grupo para generar reportes.');
+      return;
+    }
+
+    setGeneratingReport(true);
+    try {
+      const [attendanceSummary, gradesSummary, participationSummary] = await Promise.all([
+        reportService.getAttendanceSummary({ groupId: defaultGroupId }).catch(() => ({ data: {} })),
+        reportService.getGradesSummary({ groupId: defaultGroupId }).catch(() => ({ data: {} })),
+        reportService.getParticipationSummary({ groupId: defaultGroupId }).catch(() => ({ data: {} }))
+      ]);
+
+      console.log('=== REPORTE GENERAL DEL SISTEMA ===');
+      console.log('\nEstadísticas actuales:');
+      console.log(`   - Tareas: ${stats.tareas}`);
+      console.log(`   - Alumnos: ${stats.alumnos}`);
+      console.log(`   - Grupos: ${stats.grupos}`);
+      console.log(`   - Materias: ${stats.materias}`);
+      console.log(`   - Grupo base para reportes: ${defaultGroupId}`);
+
+      console.log('\nResumen de Asistencia:', attendanceSummary.data);
+      console.log('\nResumen de Calificaciones:', gradesSummary.data);
+      console.log('\nResumen de Participación:', participationSummary.data);
+      console.log('\n=====================================');
+
+      alert('Reporte generado. Revisa la consola del navegador (F12) para ver los detalles completos.');
+    } catch (err) {
+      console.error('Error al generar reporte:', err);
+      alert('Error al generar reporte: ' + (err.message || 'Error desconocido'));
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
   return (
-    <LayoutPrincipal>
+    <>
       <h2 className="title">Resumen</h2>
 
       <div className="cards">
@@ -49,8 +103,12 @@ export default function Dashboard() {
           <p>Alumnos</p>
         </div>
         <div className="card">
-          <h3>{loading ? "..." : stats.proximos}</h3>
-          <p>Próximos</p>
+          <h3>{loading ? "..." : stats.grupos}</h3>
+          <p>Grupos</p>
+        </div>
+        <div className="card">
+          <h3>{loading ? "..." : stats.materias}</h3>
+          <p>Materias</p>
         </div>
       </div>
 
@@ -58,8 +116,14 @@ export default function Dashboard() {
 
       <div className="report-box">
         <p>Calificaciones</p>
-        <button className="report-btn">Generar reporte</button>
+        <button
+          className="report-btn"
+          onClick={handleGenerateReport}
+          disabled={generatingReport}
+        >
+          {generatingReport ? 'Generando...' : 'Generar reporte'}
+        </button>
       </div>
-    </LayoutPrincipal>
+    </>
   );
 }

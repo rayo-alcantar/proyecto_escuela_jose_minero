@@ -91,3 +91,12 @@ Sus permisos están **restringidos únicamente a los grupos que tiene asignados 
 - `404`: Recurso no encontrado.
 - `409`: Conflicto (ej. recurso duplicado).
 - `500`: Error interno del servidor.
+
+## Datos de prueba
+
+- Ejecuta `npm run seed` dentro de `escuela_API` para limpiar las colecciones (se conserva/crea el admin) y poblar datos coherentes con los modelos actuales.
+- Usuarios de ejemplo:
+  - admin@escuela.com / admin123
+  - direccion@escuela.com / direccion123
+  - maestro1@escuela.com / maestro123
+  - maestro2@escuela.com / maestro123

@@ -1,24 +1,29 @@
 import { useState, useEffect } from "react";
-import apiService from "../../services/apiService";
+import taskService from "../../services/taskService";
+import subjectService from "../../services/subjectService";
+import taskSubmissionService from "../../services/taskSubmissionService";
 import "./TareasCalificaciones.css";
-import LayoutPrincipal from "../LayoutPrincipal/LayoutPrincipal";
 
 export default function TareasCalificaciones() {
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("");
-  const [tasks, setTasks] = useState([]);
+  const [tasksWithGrades, setTasksWithGrades] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchSubjects = async () => {
       try {
-        const response = await apiService.get('/api/subjects');
-        setSubjects(response.data || []);
-        if (response.data && response.data.length > 0) {
-          setSelectedSubject(response.data[0]._id);
+        const response = await subjectService.getSubjects();
+        const list = response.data || [];
+        setSubjects(list);
+        if (list.length > 0) {
+          setSelectedSubject(list[0]._id);
         }
-      } catch (error) {
-        console.error('Error al cargar materias:', error);
+        setError(null);
+      } catch (err) {
+        console.error('Error al cargar materias:', err);
+        setError('No se pudieron cargar las materias. Verifica que el backend esté corriendo.');
       } finally {
         setLoading(false);
       }
@@ -30,61 +35,111 @@ export default function TareasCalificaciones() {
   useEffect(() => {
     if (!selectedSubject) return;
 
-    const fetchTasks = async () => {
+    const fetchTasksAndGrades = async () => {
       try {
-        const response = await apiService.get(`/api/tasks?subject=${selectedSubject}`);
-        setTasks(response.data || []);
-      } catch (error) {
-        console.error('Error al cargar tareas:', error);
+        const tasksResponse = await taskService.getTasks({ subjectId: selectedSubject });
+        const fetchedTasks = tasksResponse.data || [];
+
+        const tasksWithData = await Promise.all(
+          fetchedTasks.map(async (task) => {
+            try {
+              const submissionsResponse = await taskSubmissionService.getSubmissions({ taskId: task._id });
+              const submissions = submissionsResponse.data || [];
+
+              const totalSubmissions = submissions.length;
+              const gradedSubmissions = submissions.filter(s => typeof s.score === 'number');
+              const averageScore = gradedSubmissions.length > 0
+                ? gradedSubmissions.reduce((sum, s) => sum + (s.score || 0), 0) / gradedSubmissions.length
+                : null;
+
+              return {
+                ...task,
+                totalSubmissions,
+                gradedSubmissions: gradedSubmissions.length,
+                averageGrade: averageScore != null ? averageScore.toFixed(1) : null,
+              };
+            } catch (err) {
+              console.error(`Error al cargar datos de tarea ${task._id}:`, err);
+              return {
+                ...task,
+                totalSubmissions: 0,
+                gradedSubmissions: 0,
+                averageGrade: null,
+              };
+            }
+          })
+        );
+
+        setTasksWithGrades(tasksWithData);
+        setError(null);
+      } catch (err) {
+        console.error('Error al cargar tareas:', err);
+        setError('Error al cargar tareas.');
       }
     };
 
-    fetchTasks();
+    fetchTasksAndGrades();
   }, [selectedSubject]);
 
   return (
-    <LayoutPrincipal>
+    <>
       <h2 className="title">Tareas y calificaciones</h2>
+
+      {error && (
+        <div style={{ padding: '10px', backgroundColor: '#fee', marginBottom: '10px', borderRadius: '4px' }}>
+          <p style={{ color: '#c00', margin: 0 }}>{error}</p>
+        </div>
+      )}
 
       <select
         className="select"
         value={selectedSubject}
         onChange={(e) => setSelectedSubject(e.target.value)}
-        disabled={loading}
+        disabled={loading || subjects.length === 0}
       >
-        {subjects.map((subject) => (
-          <option key={subject._id} value={subject._id}>
-            {subject.name}
-          </option>
-        ))}
+        {subjects.length > 0 ? (
+          subjects.map((subject) => (
+            <option key={subject._id} value={subject._id}>
+              {subject.name}
+            </option>
+          ))
+        ) : (
+          <option value="">No hay materias disponibles</option>
+        )}
       </select>
 
       <table className="tabla">
         <thead>
           <tr>
             <th>Tarea</th>
-            <th>Calificación</th>
+            <th>Entregas</th>
+            <th>Calificadas</th>
+            <th>Promedio</th>
           </tr>
         </thead>
         <tbody>
-          {tasks.length > 0 ? (
-            tasks.map((task) => (
+          {tasksWithGrades.length > 0 ? (
+            tasksWithGrades.map((task) => (
               <tr key={task._id}>
-                <td>{task.title || task.name}</td>
-                <td>{task.grade || "-"}</td>
+                <td>{task.title || task.name || task.description}</td>
+                <td style={{ textAlign: 'center' }}>{task.totalSubmissions}</td>
+                <td style={{ textAlign: 'center' }}>{task.gradedSubmissions}</td>
+                <td style={{ textAlign: 'center' }}>
+                  {task.averageGrade != null ? task.averageGrade : "-"}
+                </td>
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan="2" style={{ textAlign: 'center' }}>
-                {loading ? "Cargando..." : "No hay tareas registradas"}
+              <td colSpan="4" style={{ textAlign: 'center' }}>
+                {loading ? "Cargando..." : "No hay tareas registradas para esta materia"}
               </td>
             </tr>
           )}
         </tbody>
       </table>
 
-      <button className="register-btn">Registrar</button>
-    </LayoutPrincipal>
+      <button className="register-btn">Registrar Nueva Tarea</button>
+    </>
   );
 }

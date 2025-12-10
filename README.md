@@ -22,7 +22,7 @@ apis/
 │   ├── src/
 │   │   ├── componentes/  # Componentes React
 │   │   ├── services/     # Servicios API
-│   │   └── App.jsx       # Componente principal
+│   │   └── App.js       # Componente principal
 │   ├── public/
 │   ├── package.json
 │   └── .env              # Variables de entorno (NO incluido en Git)
