@@ -1,0 +1,36 @@
+.select {
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  margin-bottom: 20px;
+  font-size: 16px;
+}
+
+.tabla {
+  width: 100%;
+  background: rgba(255,255,255,0.1);
+  border-radius: 15px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  color: white;
+}
+
+.tabla th,
+.tabla td {
+  padding: 15px;
+  text-align: left;
+}
+
+.tabla thead {
+  background: rgba(255,255,255,0.2);
+}
+
+.register-btn {
+  padding: 14px 25px;
+  background: #ff7a22;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 18px;
+}

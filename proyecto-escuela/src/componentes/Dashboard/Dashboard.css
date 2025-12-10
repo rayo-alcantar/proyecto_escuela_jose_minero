@@ -1,0 +1,42 @@
+.title {
+  font-size: 32px;
+  margin-bottom: 20px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 25px;
+  margin-bottom: 40px;
+}
+
+.card {
+  background: rgba(255,255,255,0.1);
+  padding: 30px;
+  border-radius: 20px;
+  text-align: center;
+  color: white;
+  box-shadow: 0 0 8px rgba(0,0,0,0.3);
+}
+
+.card h3 {
+  font-size: 50px;
+  margin-bottom: 10px;
+}
+
+.report-box {
+  background: rgba(255,255,255,0.1);
+  padding: 30px;
+  border-radius: 20px;
+  width: 350px;
+}
+
+.report-btn {
+  margin-top: 15px;
+  padding: 10px 20px;
+  background: #ff7a22;
+  border: none;
+  border-radius: 12px;
+  color: white;
+  cursor: pointer;
+}
