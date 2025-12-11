@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import userService from "../../services/userService";
 import studentService from "../../services/studentService";
 import groupService from "../../services/groupService";
@@ -11,11 +11,6 @@ import "./AdminPanel.css";
 
 const attendanceStatuses = ["PRESENT", "ABSENT", "LATE", "EXCUSED"];
 
-function useInput(initialValue = "") {
-  const [value, setValue] = useState(initialValue);
-  return { value, setValue, bind: { value, onChange: (e) => setValue(e.target.value) } };
-}
-
 const getErrorMessage = (err) => {
   if (!err) return "Ocurrió un error inesperado";
   if (err.message) return err.message;
@@ -23,17 +18,26 @@ const getErrorMessage = (err) => {
   return "No se pudo completar la operación";
 };
 
+const useInput = (initialValue = "") => {
+  const [value, setValue] = useState(initialValue);
+  return { value, setValue, bind: { value, onChange: (e) => setValue(e.target.value) } };
+};
+
 export default function AdminPanel() {
   const currentUser = authService.getCurrentUser();
   const canManageUsers = currentUser?.role === "ADMIN";
+
   const [users, setUsers] = useState([]);
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [enrollmentsByGroup, setEnrollmentsByGroup] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState({});
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState("");
   const [success, setSuccess] = useState("");
+  const [showStudentsList, setShowStudentsList] = useState(false);
+  const [showGroupsList, setShowGroupsList] = useState(false);
 
   const { value: userFullName, bind: bindUserFullName, setValue: setUserFullName } = useInput("");
   const { value: userEmail, bind: bindUserEmail, setValue: setUserEmail } = useInput("");
@@ -50,6 +54,9 @@ export default function AdminPanel() {
   const { value: groupYear, bind: bindGroupYear, setValue: setGroupYear } = useInput("2024-2025");
   const { value: groupTutor, bind: bindGroupTutor, setValue: setGroupTutor } = useInput("");
 
+  const { value: tutorGroup, bind: bindTutorGroup, setValue: setTutorGroup } = useInput("");
+  const { value: tutorTeacher, bind: bindTutorTeacher, setValue: setTutorTeacher } = useInput("");
+
   const { value: subjectName, bind: bindSubjectName, setValue: setSubjectName } = useInput("");
   const { value: subjectCode, bind: bindSubjectCode, setValue: setSubjectCode } = useInput("");
   const { value: subjectGrade, bind: bindSubjectGrade, setValue: setSubjectGrade } = useInput("");
@@ -65,12 +72,8 @@ export default function AdminPanel() {
   const { value: taskDueDate, bind: bindTaskDueDate, setValue: setTaskDueDate } = useInput("");
 
   const { value: attendanceGroup, bind: bindAttendanceGroup, setValue: setAttendanceGroup } = useInput("");
-  const [attendanceRecords, setAttendanceRecords] = useState({});
 
   const teacherUsers = useMemo(() => users.filter((u) => u.role === "TEACHER"), [users]);
-  const studentsCount = students.length;
-  const groupsCount = groups.length;
-  const subjectsCount = subjects.length;
 
   const resetMessages = () => {
     setErrors("");
@@ -88,8 +91,8 @@ export default function AdminPanel() {
 
   const showSuccess = (message) => {
     setErrors("");
-    alert(message);
     setSuccess(message);
+    alert(message);
   };
 
   const loadCatalogs = async () => {
@@ -105,11 +108,17 @@ export default function AdminPanel() {
       setStudents(studentsRes.data || []);
       setGroups(groupsRes.data || []);
       setSubjects(subjectsRes.data || []);
-      if (groupsRes.data?.length) {
-        setGroupTutor(groupsRes.data[0].tutor?._id || "");
-        setEnrollmentGroup(groupsRes.data[0]._id);
-        setTaskGroup(groupsRes.data[0]._id);
-        setAttendanceGroup(groupsRes.data[0]._id);
+      const firstGroup = groupsRes.data?.[0];
+      if (firstGroup) {
+        setGroupTutor(firstGroup.tutor?._id || "");
+        setEnrollmentGroup(firstGroup._id);
+        setTaskGroup(firstGroup._id);
+        setAttendanceGroup(firstGroup._id);
+        setTutorGroup(firstGroup._id);
+      }
+      const firstTeacher = teacherUsers?.[0];
+      if (firstTeacher) {
+        setTutorTeacher(firstTeacher._id);
       }
       if (subjectsRes.data?.length) {
         setTaskSubject(subjectsRes.data[0]._id);
@@ -150,32 +159,6 @@ export default function AdminPanel() {
     loadEnrollmentsForGroup(attendanceGroup);
   }, [attendanceGroup]);
 
-  const handleCreateUser = async (e) => {
-    e.preventDefault();
-    resetMessages();
-    try {
-      if (!canManageUsers) {
-        showError("Solo ADMIN puede crear usuarios.", "crear usuario");
-        return;
-      }
-      await userService.createUser({
-        fullName: userFullName,
-        email: userEmail,
-        password: userPassword,
-        role: userRole,
-      });
-      showSuccess("Usuario creado correctamente.");
-      setUserFullName("");
-      setUserEmail("");
-      setUserPassword("");
-      setUserRole("TEACHER");
-      const refreshed = await userService.getUsers();
-      setUsers(refreshed.data || []);
-    } catch (err) {
-      showError(err, "crear usuario");
-    }
-  };
-
   const handleCreateStudent = async (e) => {
     e.preventDefault();
     resetMessages();
@@ -194,9 +177,7 @@ export default function AdminPanel() {
       const refreshed = await studentService.getStudents();
       setStudents(refreshed.data || []);
       const newId = created?.data?._id || refreshed.data?.[0]?._id;
-      if (newId) {
-        setEnrollmentStudent(newId);
-      }
+      if (newId) setEnrollmentStudent(newId);
     } catch (err) {
       showError(err, "crear alumno");
     }
@@ -223,10 +204,24 @@ export default function AdminPanel() {
         setEnrollmentGroup(targetGroup);
         setTaskGroup(targetGroup);
         setAttendanceGroup(targetGroup);
+        setTutorGroup(targetGroup);
         await loadEnrollmentsForGroup(targetGroup);
       }
     } catch (err) {
       showError(err, "crear grupo");
+    }
+  };
+
+  const handleAssignTutor = async (e) => {
+    e.preventDefault();
+    resetMessages();
+    try {
+      await groupService.updateGroup(tutorGroup, { tutor: tutorTeacher });
+      showSuccess("Tutor asignado al grupo.");
+      const refreshed = await groupService.getGroups();
+      setGroups(refreshed.data || []);
+    } catch (err) {
+      showError(err, "asignar tutor");
     }
   };
 
@@ -328,62 +323,21 @@ export default function AdminPanel() {
         </div>
       )}
 
+      <div className="toolbar">
+        <button className="secondary" onClick={loadCatalogs}>Refrescar datos</button>
+        <span className="muted">Alumnos: {students.length} | Grupos: {groups.length} | Materias: {subjects.length}</span>
+      </div>
+
       <div className="grid">
-        <section className="card wide">
-          <h3>Resumen rápido</h3>
-          <div className="summary">
-            <div>
-              <strong>Alumnos ({studentsCount}):</strong>
-              <ul>
-                {students.slice(0, 5).map((s) => (
-                  <li key={s._id}>{s.firstName} {s.lastName}</li>
-                ))}
-                {students.length === 0 && <li className="muted">Sin alumnos aún</li>}
-              </ul>
-            </div>
-            <div>
-              <strong>Grupos ({groupsCount}):</strong>
-              <ul>
-                {groups.slice(0, 5).map((g) => (
-                  <li key={g._id}>{g.name} (Grado {g.gradeLevel})</li>
-                ))}
-                {groups.length === 0 && <li className="muted">Sin grupos aún</li>}
-              </ul>
-            </div>
-            <div>
-              <strong>Materias ({subjectsCount}):</strong>
-              <ul>
-                {subjects.slice(0, 5).map((s) => (
-                  <li key={s._id}>{s.name}</li>
-                ))}
-                {subjects.length === 0 && <li className="muted">Sin materias aún</li>}
-              </ul>
-            </div>
-          </div>
-        </section>
-
-        <section className="card">
-          <h3>Crear usuario</h3>
-          <form onSubmit={handleCreateUser} className="form">
-            {!canManageUsers && <p className="muted">Solo ADMIN puede gestionar usuarios.</p>}
-            <input type="text" placeholder="Nombre completo" required disabled={!canManageUsers} {...bindUserFullName} />
-            <input type="email" placeholder="Email" required disabled={!canManageUsers} {...bindUserEmail} />
-            <input type="password" placeholder="Contraseña" required disabled={!canManageUsers} {...bindUserPassword} />
-            <select disabled={!canManageUsers} {...bindUserRole}>
-              <option value="ADMIN">ADMIN</option>
-              <option value="DIRECTION">DIRECTION</option>
-              <option value="TEACHER">TEACHER</option>
-            </select>
-            <button type="submit" disabled={!canManageUsers}>Crear usuario</button>
-          </form>
-        </section>
-
         <section className="card">
           <h3>Crear alumno</h3>
           <form onSubmit={handleCreateStudent} className="form">
-            <input type="text" placeholder="Nombre" required {...bindStudentFirstName} />
-            <input type="text" placeholder="Apellidos" required {...bindStudentLastName} />
-            <input type="text" placeholder="Código (opcional)" {...bindStudentCode} />
+            <label>Nombre</label>
+            <input type="text" required {...bindStudentFirstName} />
+            <label>Apellidos</label>
+            <input type="text" required {...bindStudentLastName} />
+            <label>Código (opcional)</label>
+            <input type="text" placeholder="Dejar vacío para generar uno" {...bindStudentCode} />
             <button type="submit">Crear alumno</button>
           </form>
         </section>
@@ -391,10 +345,15 @@ export default function AdminPanel() {
         <section className="card">
           <h3>Crear grupo</h3>
           <form onSubmit={handleCreateGroup} className="form">
-            <input type="text" placeholder="Nombre" required {...bindGroupName} />
-            <input type="number" min="1" max="6" placeholder="Grado" required {...bindGroupGrade} />
-            <input type="text" placeholder="Sección" {...bindGroupSection} />
-            <input type="text" placeholder="Ciclo escolar" required {...bindGroupYear} />
+            <label>Nombre</label>
+            <input type="text" required {...bindGroupName} />
+            <label>Grado (1-6)</label>
+            <input type="number" min="1" max="6" required {...bindGroupGrade} />
+            <label>Sección</label>
+            <input type="text" {...bindGroupSection} />
+            <label>Ciclo escolar</label>
+            <input type="text" required {...bindGroupYear} />
+            <label>Tutor (opcional)</label>
             <select {...bindGroupTutor}>
               <option value="">Sin tutor</option>
               {teacherUsers.map((t) => (
@@ -406,11 +365,36 @@ export default function AdminPanel() {
         </section>
 
         <section className="card">
+          <h3>Asignar tutor a grupo</h3>
+          <form onSubmit={handleAssignTutor} className="form">
+            <label>Grupo</label>
+            <select {...bindTutorGroup} required>
+              <option value="">Selecciona grupo</option>
+              {groups.map((g) => (
+                <option key={g._id} value={g._id}>{g.name}</option>
+              ))}
+            </select>
+            <label>Docente</label>
+            <select {...bindTutorTeacher} required>
+              <option value="">Selecciona docente</option>
+              {teacherUsers.map((t) => (
+                <option key={t._id} value={t._id}>{t.fullName}</option>
+              ))}
+            </select>
+            <button type="submit">Asignar tutor</button>
+          </form>
+        </section>
+
+        <section className="card">
           <h3>Crear materia</h3>
           <form onSubmit={handleCreateSubject} className="form">
-            <input type="text" placeholder="Nombre" required {...bindSubjectName} />
-            <input type="text" placeholder="Código" required {...bindSubjectCode} />
-            <input type="number" min="1" max="6" placeholder="Grado (opcional)" {...bindSubjectGrade} />
+            <label>Nombre</label>
+            <input type="text" required {...bindSubjectName} />
+            <label>Código</label>
+            <input type="text" required {...bindSubjectCode} />
+            <label>Grado (opcional)</label>
+            <input type="number" min="1" max="6" {...bindSubjectGrade} />
+            <label>Docente (opcional)</label>
             <select {...bindSubjectTeacher}>
               <option value="">Sin docente asignado</option>
               {teacherUsers.map((t) => (
@@ -422,14 +406,16 @@ export default function AdminPanel() {
         </section>
 
         <section className="card">
-          <h3>Crear inscripción</h3>
+          <h3>Inscripción</h3>
           <form onSubmit={handleCreateEnrollment} className="form">
+            <label>Alumno</label>
             <select {...bindEnrollmentStudent} required>
               <option value="">Selecciona alumno</option>
               {students.map((s) => (
                 <option key={s._id} value={s._id}>{`${s.firstName} ${s.lastName}`}</option>
               ))}
             </select>
+            <label>Grupo</label>
             <select {...bindEnrollmentGroup} required>
               <option value="">Selecciona grupo</option>
               {groups.map((g) => (
@@ -443,71 +429,43 @@ export default function AdminPanel() {
         <section className="card">
           <h3>Crear tarea</h3>
           <form onSubmit={handleCreateTask} className="form">
-            <input type="text" placeholder="Título" required {...bindTaskTitle} />
-            <textarea placeholder="Descripción" rows={2} {...bindTaskDesc} />
+            <label>Título</label>
+            <input type="text" required {...bindTaskTitle} />
+            <label>Descripción</label>
+            <textarea rows={2} {...bindTaskDesc} />
+            <label>Grupo</label>
             <select {...bindTaskGroup} required>
               <option value="">Selecciona grupo</option>
               {groups.map((g) => (
                 <option key={g._id} value={g._id}>{g.name}</option>
               ))}
             </select>
+            <label>Materia</label>
             <select {...bindTaskSubject} required>
               <option value="">Selecciona materia</option>
               {subjects.map((s) => (
                 <option key={s._id} value={s._id}>{s.name}</option>
               ))}
             </select>
+            <label>Fecha de entrega</label>
             <input type="date" required {...bindTaskDueDate} />
             <button type="submit">Crear tarea</button>
           </form>
         </section>
 
         <section className="card wide">
-          <h3>Alumnos registrados ({studentsCount})</h3>
-          <div className="list-container">
-            {students.length === 0 ? (
-              <p className="muted">Sin alumnos aún</p>
-            ) : (
-              <ul className="simple-list">
-                {students.map((s) => (
-                  <li key={s._id}>
-                    <div className="list-title">{s.firstName} {s.lastName}</div>
-                    <div className="list-sub">{s.studentCode ? `Código: ${s.studentCode}` : "Sin código"}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </section>
-
-        <section className="card wide">
-          <h3>Grupos registrados ({groupsCount})</h3>
-          <div className="list-container">
-            {groups.length === 0 ? (
-              <p className="muted">Sin grupos aún</p>
-            ) : (
-              <ul className="simple-list">
-                {groups.map((g) => (
-                  <li key={g._id}>
-                    <div className="list-title">{g.name}</div>
-                    <div className="list-sub">Grado {g.gradeLevel} {g.section || ""}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </section>
-
-        <section className="card wide">
-          <h3>Registrar asistencia</h3>
+          <h3>Asistencia</h3>
           <form onSubmit={handleSubmitAttendance}>
             <div className="attendance-header">
-              <select {...bindAttendanceGroup} required>
-                <option value="">Selecciona grupo</option>
-                {groups.map((g) => (
-                  <option key={g._id} value={g._id}>{g.name}</option>
-                ))}
-              </select>
+              <div>
+                <label>Grupo</label>
+                <select {...bindAttendanceGroup} required>
+                  <option value="">Selecciona grupo</option>
+                  {groups.map((g) => (
+                    <option key={g._id} value={g._id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
               <button type="submit">Guardar asistencia</button>
             </div>
 
@@ -553,6 +511,56 @@ export default function AdminPanel() {
               </table>
             )}
           </form>
+        </section>
+
+        <section className="card wide">
+          <div className="list-header">
+            <h3>Alumnos registrados ({students.length})</h3>
+            <button className="secondary" onClick={() => setShowStudentsList((s) => !s)}>
+              {showStudentsList ? "Ocultar" : "Ver lista"}
+            </button>
+          </div>
+          {showStudentsList && (
+            <div className="list-container">
+              {students.length === 0 ? (
+                <p className="muted">Sin alumnos aún</p>
+              ) : (
+                <ul className="simple-list">
+                  {students.map((s) => (
+                    <li key={s._id}>
+                      <div className="list-title">{s.firstName} {s.lastName}</div>
+                      <div className="list-sub">{s.studentCode ? `Código: ${s.studentCode}` : "Sin código"}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="card wide">
+          <div className="list-header">
+            <h3>Grupos registrados ({groups.length})</h3>
+            <button className="secondary" onClick={() => setShowGroupsList((s) => !s)}>
+              {showGroupsList ? "Ocultar" : "Ver lista"}
+            </button>
+          </div>
+          {showGroupsList && (
+            <div className="list-container">
+              {groups.length === 0 ? (
+                <p className="muted">Sin grupos aún</p>
+              ) : (
+                <ul className="simple-list">
+                  {groups.map((g) => (
+                    <li key={g._id}>
+                      <div className="list-title">{g.name}</div>
+                      <div className="list-sub">Grado {g.gradeLevel} {g.section || ""}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </section>
       </div>
     </div>

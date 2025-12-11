@@ -1,0 +1,34 @@
+*** Begin Patch
+*** Update File: escuela_API/src/controllers/studentController.js
+@@
+ const logAudit = require('../utils/auditLogger');
++
++const generateStudentCode = () => {
++  const random = Math.floor(Math.random() * 1000)
++    .toString()
++    .padStart(3, '0');
++  return `STU-${Date.now().toString().slice(-4)}${random}`;
++};
+@@
+-    const payload = { ...req.body };
+-    if (!payload.studentCode || String(payload.studentCode).trim() === '') {
+-      delete payload.studentCode; // evita valores vacÇðos que chocan con el Çðndice Ç§nico
+-    }
++    const payload = { ...req.body };
++    if (!payload.studentCode || String(payload.studentCode).trim() === '') {
++      payload.studentCode = generateStudentCode();
++    }
+ 
+     const student = await Student.create(payload);
+@@
+-  } catch (error) {
+-    return errorResponse(res, 'No se pudo crear el alumno', 500, error.message);
+-  }
++  } catch (error) {
++    if (error?.code === 11000) {
++      return errorResponse(res, 'El código de alumno ya existe', 409, error.message);
++    }
++    return errorResponse(res, 'No se pudo crear el alumno', 500, error.message);
++  }
+ };
+*** End Patch
