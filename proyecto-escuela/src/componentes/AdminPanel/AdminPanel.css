@@ -1,5 +1,5 @@
 .admin-panel {
-  color: #0f172a;
+  color: #fff;
 }
 
 .toolbar {
@@ -12,7 +12,7 @@
 
 .toolbar h2 {
   margin: 0;
-  color: #f8fafc;
+  color: #fff;
 }
 
 .toolbar-actions {
@@ -26,23 +26,24 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 12px;
-  color: #e2e8f0;
+  color: #eee;
 }
 
 .banner {
   margin: 10px 0;
   padding: 12px;
   border-radius: 10px;
+  backdrop-filter: blur(6px);
 }
 
 .banner.error {
-  background: #ffe5e5;
-  color: #8b0000;
+  background: rgba(255, 107, 107, 0.2);
+  color: #ffdede;
 }
 
 .banner.success {
-  background: #e6ffef;
-  color: #0f7a2e;
+  background: rgba(46, 204, 113, 0.18);
+  color: #d9ffe5;
 }
 
 .section-grid {
@@ -52,10 +53,12 @@
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: 14px;
-  padding: 14px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .card-head {
@@ -68,11 +71,12 @@
 
 .card h3 {
   margin: 0;
+  color: #fff;
 }
 
 .chip {
-  background: #eef2ff;
-  color: #312e81;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 12px;
@@ -88,7 +92,7 @@
 .form label {
   font-size: 13px;
   font-weight: 600;
-  color: #1f2937;
+  color: #eee;
 }
 
 .form input,
@@ -96,11 +100,12 @@
 .form textarea,
 .attendance-header select {
   width: 100%;
-  padding: 10px;
+  padding: 12px;
   border-radius: 10px;
-  border: 1px solid #d0d7e2;
+  border: none;
   font-size: 14px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 .form textarea {
@@ -110,7 +115,7 @@
 .form button,
 .attendance-header button,
 .actions button {
-  background: linear-gradient(135deg, #2b3a8a, #7a3ea1);
+  background: #ff7a22;
   border: none;
   border-radius: 10px;
   color: white;
@@ -143,18 +148,23 @@
 .tabla {
   width: 100%;
   border-collapse: collapse;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  overflow: hidden;
 }
 
 .tabla th,
 .tabla td {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   padding: 8px;
   text-align: left;
+  color: #fff;
 }
 
 .tabla th {
   font-size: 13px;
-  color: #111827;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .tabla td input,
@@ -163,7 +173,7 @@
 }
 
 .muted {
-  color: #475569;
+  color: #eee;
   margin: 0;
 }
 
@@ -173,7 +183,7 @@
 
 .divider {
   margin: 14px 0;
-  border-bottom: 1px dashed #e5e7eb;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.25);
 }
 
 .inline-filters {
@@ -186,10 +196,11 @@
 .list-container {
   max-height: 280px;
   overflow-y: auto;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 10px;
   padding: 10px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .simple-list {
@@ -200,22 +211,23 @@
 
 .simple-list li {
   padding: 8px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .list-title {
   font-weight: 700;
+  color: #fff;
 }
 
 .list-sub {
   font-size: 12px;
-  color: #475569;
+  color: #eee;
 }
 
 .secondary {
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #111827;
+  color: #fff;
   padding: 8px 12px;
   border-radius: 10px;
   cursor: pointer;
@@ -242,4 +254,12 @@
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+.form input:focus,
+.form select:focus,
+.form textarea:focus,
+.attendance-header select:focus {
+  outline: 2px solid #ff7a22;
+  box-shadow: 0 0 0 3px rgba(255, 122, 34, 0.3);
 }

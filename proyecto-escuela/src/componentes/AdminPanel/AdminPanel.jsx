@@ -8,6 +8,7 @@ import enrollmentService from '../../services/enrollmentService';
 import taskService from '../../services/taskService';
 import taskSubmissionService from '../../services/taskSubmissionService';
 import attendanceService from '../../services/attendanceService';
+import reportService from '../../services/reportService';
 import './AdminPanel.css';
 
 const attendanceStatuses = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'];
@@ -37,6 +38,7 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState('');
   const [success, setSuccess] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
 
   const [users, setUsers] = useState([]);
   const [students, setStudents] = useState([]);
@@ -153,6 +155,13 @@ export default function AdminPanel() {
     setErrors('');
     setSuccess(message);
     alert(message);
+  };
+
+  const getSafeGroupIdForTeacher = () => {
+    if (currentUser?.role === 'TEACHER') {
+      return filterGroup && allowedGroupIds.includes(filterGroup) ? filterGroup : allowedGroupIds[0];
+    }
+    return filterGroup || allowedGroupIds[0] || groups[0]?._id || groups[0]?.id;
   };
 
   const loadTasks = async ({ keepSelection = false, incomingFilters = null } = {}) => {
@@ -658,6 +667,151 @@ export default function AdminPanel() {
     }
   };
 
+  const fetchSummariesForGroups = async (groupIds) => {
+    const attendanceSummaries = [];
+    const gradesSummaries = [];
+    for (const gid of groupIds) {
+      try {
+        const attend = await reportService.getAttendanceSummary({ groupId: gid });
+        attendanceSummaries.push({ groupId: gid, data: attend?.data || [] });
+      } catch (err) {
+        console.error('Attendance summary error', gid, err);
+      }
+      try {
+        const grades = await reportService.getGradesSummary({ groupId: gid });
+        gradesSummaries.push({ groupId: gid, data: grades?.data || [] });
+      } catch (err) {
+        console.error('Grades summary error', gid, err);
+      }
+    }
+    return { attendanceSummaries, gradesSummaries };
+  };
+
+  const buildPdfReport = async ({ title, scopeLabel, stats, attendanceTable, gradesTable }) => {
+    const { jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
+    const doc = new jsPDF();
+    const now = new Date().toLocaleString('es-MX');
+
+    doc.setFontSize(16);
+    doc.text(title, 14, 16);
+    doc.setFontSize(10);
+    doc.text(`Alcance: ${scopeLabel}`, 14, 24);
+    doc.text(`Generado: ${now}`, 14, 30);
+
+    doc.setFontSize(12);
+    doc.text('Resumen', 14, 40);
+    const summaryLines = [
+      `Alumnos: ${stats.totalStudents}`,
+      `Grupos: ${stats.totalGroups}`,
+      `Promedio asistencia: ${stats.avgAttendance}%`,
+      `Promedio calificacion: ${stats.avgGrade}%`,
+    ];
+    summaryLines.forEach((line, idx) => {
+      doc.text(line, 14, 48 + idx * 6);
+    });
+
+    let currentY = 48 + summaryLines.length * 6 + 6;
+
+    if (attendanceTable?.length) {
+      doc.setFontSize(12);
+      doc.text('Asistencia por alumno', 14, currentY);
+      currentY += 4;
+      doc.autoTable({
+        startY: currentY,
+        head: [['Alumno', 'Asistencia %', 'Total']],
+        body: attendanceTable.map((row) => [row.name, `${row.percent}%`, row.total]),
+        styles: { fontSize: 9 },
+      });
+      currentY = doc.lastAutoTable.finalY + 8;
+    }
+
+    if (gradesTable?.length) {
+      doc.setFontSize(12);
+      doc.text('Calificaciones', 14, currentY);
+      currentY += 4;
+      doc.autoTable({
+        startY: currentY,
+        head: [['Alumno', 'Promedio %', 'Registros']],
+        body: gradesTable.map((row) => [row.name, `${row.average}%`, row.records]),
+        styles: { fontSize: 9 },
+      });
+    }
+
+    doc.save('reporte.pdf');
+  };
+
+  const generateReport = async () => {
+    resetMessages();
+    setReportLoading(true);
+    try {
+      const scopeIsTeacher = currentUser?.role === 'TEACHER';
+      const targetGroupIds = scopeIsTeacher ? (allowedGroupIds.length ? allowedGroupIds : []) : groups.map((g) => g._id || g.id);
+      if (!targetGroupIds.length) {
+        showError('No hay grupos disponibles para generar reporte', 'reporte');
+        setReportLoading(false);
+        return;
+      }
+      const { attendanceSummaries, gradesSummaries } = await fetchSummariesForGroups(targetGroupIds);
+
+      let presentSum = 0;
+      let totalSum = 0;
+      const attendanceRows = [];
+      attendanceSummaries.forEach(({ data }) => {
+        data.forEach((row) => {
+          const present = row.PRESENT || 0;
+          const total = row.total || 0;
+          presentSum += present;
+          totalSum += total;
+          attendanceRows.push({
+            name: `${row.student?.firstName || ''} ${row.student?.lastName || ''}`.trim() || 'Alumno',
+            percent: total ? Math.round((present / total) * 100) : 0,
+            total,
+          });
+        });
+      });
+
+      const gradeRows = [];
+      gradesSummaries.forEach(({ data }) => {
+        data.forEach((row) => {
+          gradeRows.push({
+            name: `${row.student?.firstName || ''} ${row.student?.lastName || ''}`.trim() || 'Alumno',
+            average: Math.round(row.average || 0),
+            records: row.records || 0,
+          });
+        });
+      });
+
+      const avgAttendance = totalSum ? Math.round((presentSum / totalSum) * 100) : 0;
+      const avgGrade = gradeRows.length
+        ? Math.round(gradeRows.reduce((acc, g) => acc + (g.average || 0), 0) / gradeRows.length)
+        : 0;
+
+      const title = scopeIsTeacher ? 'Reporte de grupo' : 'Reporte general de escuela';
+      const scopeLabel = scopeIsTeacher
+        ? `Docente: ${currentUser?.fullName || ''} | Grupos: ${targetGroupIds.length}`
+        : `Administrador | Grupos: ${targetGroupIds.length}`;
+
+      await buildPdfReport({
+        title,
+        scopeLabel,
+        stats: {
+          totalStudents: scopeIsTeacher ? attendanceRows.length || gradeRows.length || students.length : students.length,
+          totalGroups: targetGroupIds.length,
+          avgAttendance,
+          avgGrade,
+        },
+        attendanceTable: attendanceRows.slice(0, 20),
+        gradesTable: gradeRows.slice(0, 20),
+      });
+      showSuccess('Reporte generado y descargado');
+    } catch (err) {
+      showError(err, 'generar reporte');
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   if (loading) {
     return <p style={{ color: 'white' }}>Cargando datos del panel...</p>;
   }
@@ -675,6 +829,9 @@ export default function AdminPanel() {
         </div>
         <div className="toolbar-actions">
           <button className="secondary" onClick={loadCatalogs}>Refrescar</button>
+          <button className="secondary" onClick={generateReport} disabled={reportLoading}>
+            {reportLoading ? 'Generando...' : 'Generar reporte'}
+          </button>
           <span className="muted">Alumnos: {students.length} | Grupos: {groups.length} | Materias: {subjects.length}</span>
         </div>
       </div>
