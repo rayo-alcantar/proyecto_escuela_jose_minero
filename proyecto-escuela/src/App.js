@@ -12,6 +12,14 @@ const PrivateRoute = ({ children }) => {
   return isAuthenticated ? children : <Navigate to="/" replace />;
 };
 
+const RoleRoute = ({ roles, children }) => {
+  const user = authService.getCurrentUser();
+  if (!user || (roles && !roles.includes(user.role))) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
 function App() {
   return (
     <BrowserRouter>
@@ -21,7 +29,14 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/asistencia" element={<Asistencia />} />
           <Route path="/calificaciones" element={<TareasCalificaciones />} />
-          <Route path="/admin" element={<AdminPanel />} />
+          <Route
+            path="/admin"
+            element={
+              <RoleRoute roles={['ADMIN', 'DIRECTION', 'TEACHER']}>
+                <AdminPanel />
+              </RoleRoute>
+            }
+          />
         </Route>
       </Routes>
     </BrowserRouter>

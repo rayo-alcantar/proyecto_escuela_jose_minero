@@ -30,7 +30,9 @@ const useInput = (initialValue = '') => {
 export default function AdminPanel() {
   const currentUser = authService.getCurrentUser();
   const isAdmin = currentUser?.role === 'ADMIN';
-  const canManageStaff = isAdmin || currentUser?.role === 'DIRECTION';
+  const isDirection = currentUser?.role === 'DIRECTION';
+  const isTeacher = currentUser?.role === 'TEACHER';
+  const canManageStaff = isAdmin || isDirection;
 
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState('');
@@ -106,7 +108,21 @@ export default function AdminPanel() {
 
   const { value: attendanceGroup, bind: bindAttendanceGroup, setValue: setAttendanceGroup } = useInput('');
 
+  const currentUserId = currentUser?._id || currentUser?.id;
   const teacherUsers = useMemo(() => users.filter((u) => u.role === 'TEACHER'), [users]);
+  const selectableGroups = useMemo(() => {
+    if (currentUser?.role === 'TEACHER' && currentUserId) {
+      return groups.filter((g) => {
+        const tutorId = g.tutor?._id || g.tutor;
+        return tutorId === currentUserId;
+      });
+    }
+    return groups;
+  }, [groups, currentUser, currentUserId]);
+  const allowedGroupIds = useMemo(
+    () => selectableGroups.map((g) => g._id || g.id || g),
+    [selectableGroups],
+  );
   const filteredTasks = useMemo(
     () =>
       tasks.filter((t) => {
@@ -118,17 +134,6 @@ export default function AdminPanel() {
       }),
     [tasks, filterGroup, filterSubject],
   );
-
-  const currentUserId = currentUser?._id || currentUser?.id;
-  const selectableGroups = useMemo(() => {
-    if (currentUser?.role === 'TEACHER' && currentUserId) {
-      return groups.filter((g) => {
-        const tutorId = g.tutor?._id || g.tutor;
-        return tutorId === currentUserId;
-      });
-    }
-    return groups;
-  }, [groups, currentUser, currentUserId]);
 
   const resetMessages = () => {
     setErrors('');
@@ -153,8 +158,12 @@ export default function AdminPanel() {
   const loadTasks = async ({ keepSelection = false, incomingFilters = null } = {}) => {
     try {
       const query = {};
-      const groupId = incomingFilters?.groupId || filterGroup;
+      let groupId = incomingFilters?.groupId || filterGroup;
       const subjectId = incomingFilters?.subjectId || filterSubject;
+      if (currentUser?.role === 'TEACHER' && groupId && !allowedGroupIds.includes(groupId)) {
+        groupId = allowedGroupIds[0] || '';
+        setFilterGroup(groupId);
+      }
       if (groupId) query.group = groupId;
       if (subjectId) query.subject = subjectId;
       const resp = await taskService.getTasks(query);
@@ -237,6 +246,12 @@ export default function AdminPanel() {
   useEffect(() => {
     loadTasks();
   }, [filterGroup, filterSubject]);
+
+  useEffect(() => {
+    if (currentUser?.role === 'TEACHER' && filterGroup && !allowedGroupIds.includes(filterGroup)) {
+      setFilterGroup(allowedGroupIds[0] || '');
+    }
+  }, [currentUser, filterGroup, allowedGroupIds]);
 
   useEffect(() => {
     if (!editUserId) {
@@ -498,6 +513,10 @@ export default function AdminPanel() {
   const handleCreateEnrollment = async (e) => {
     e.preventDefault();
     resetMessages();
+    if (currentUser?.role === 'TEACHER' && enrollmentGroup && !allowedGroupIds.includes(enrollmentGroup)) {
+      showError('Selecciona uno de tus grupos asignados', 'crear inscripcion');
+      return;
+    }
     try {
       await enrollmentService.createEnrollment({
         studentId: enrollmentStudent,
@@ -516,6 +535,10 @@ export default function AdminPanel() {
   const handleCreateTask = async (e) => {
     e.preventDefault();
     resetMessages();
+    if (currentUser?.role === 'TEACHER' && taskGroup && !allowedGroupIds.includes(taskGroup)) {
+      showError('Selecciona uno de tus grupos asignados', 'crear tarea');
+      return;
+    }
     try {
       await taskService.createTask({
         title: taskTitle,
@@ -558,6 +581,10 @@ export default function AdminPanel() {
   const handleSubmitAttendance = async (e) => {
     e.preventDefault();
     resetMessages();
+    if (currentUser?.role === 'TEACHER' && attendanceGroup && !allowedGroupIds.includes(attendanceGroup)) {
+      showError('Selecciona uno de tus grupos asignados', 'registrar asistencia');
+      return;
+    }
     try {
       const records = Object.entries(attendanceRecords).map(([studentId, status]) => ({
         studentId,
@@ -643,7 +670,7 @@ export default function AdminPanel() {
     <div className="admin-panel">
       <div className="toolbar">
         <div>
-          <p className="eyebrow">Panel administrador</p>
+          <p className="eyebrow">{canManageStaff ? 'Panel administrador' : 'Panel docente'}</p>
           <h2>Control escolar</h2>
         </div>
         <div className="toolbar-actions">
@@ -707,80 +734,86 @@ export default function AdminPanel() {
           </section>
         )}
 
-        <section className="card">
-          <div className="card-head">
-            <h3>Alumno nuevo</h3>
-            <span className="chip">Codigo opcional</span>
-          </div>
-          <form className="form" onSubmit={handleCreateStudent}>
-            <label>Nombre</label>
-            <input type="text" required {...bindStudentFirstName} />
-            <label>Apellidos</label>
-            <input type="text" required {...bindStudentLastName} />
-            <label>Codigo (opcional)</label>
-            <input type="text" placeholder="Dejar vacio para autogenerar" {...bindStudentCode} />
-            <button type="submit">Crear alumno</button>
-          </form>
-        </section>
+        {canManageStaff && (
+          <section className="card">
+            <div className="card-head">
+              <h3>Alumno nuevo</h3>
+              <span className="chip">Codigo opcional</span>
+            </div>
+            <form className="form" onSubmit={handleCreateStudent}>
+              <label>Nombre</label>
+              <input type="text" required {...bindStudentFirstName} />
+              <label>Apellidos</label>
+              <input type="text" required {...bindStudentLastName} />
+              <label>Codigo (opcional)</label>
+              <input type="text" placeholder="Dejar vacio para autogenerar" {...bindStudentCode} />
+              <button type="submit">Crear alumno</button>
+            </form>
+          </section>
+        )}
 
-        <section className="card">
-          <div className="card-head">
-            <h3>Editar alumno</h3>
-            <span className="chip">Rapido</span>
-          </div>
-          <form className="form" onSubmit={handleUpdateStudent}>
-            <label>Alumno</label>
-            <select value={selectedStudentEdit} onChange={(e) => setSelectedStudentEdit(e.target.value)}>
-              <option value="">Selecciona alumno</option>
-              {students.map((s) => (
-                <option key={s._id} value={s._id}>{`${s.firstName} ${s.lastName}`}</option>
-              ))}
-            </select>
-            <label>Nombre</label>
-            <input type="text" value={editStudentFirst} onChange={(e) => setEditStudentFirst(e.target.value)} />
-            <label>Apellidos</label>
-            <input type="text" value={editStudentLast} onChange={(e) => setEditStudentLast(e.target.value)} />
-            <label>Codigo (opcional)</label>
-            <input
-              type="text"
-              value={editStudentCode}
-              onChange={(e) => setEditStudentCode(e.target.value)}
-              placeholder="Dejar vacio para mantener/generar"
-            />
-            <label>Estado</label>
-            <select value={editStudentStatus} onChange={(e) => setEditStudentStatus(e.target.value)}>
-              {studentStatuses.map((st) => (
-                <option key={st} value={st}>{st}</option>
-              ))}
-            </select>
-            <button type="submit">Guardar cambios</button>
-          </form>
-        </section>
+        {canManageStaff && (
+          <section className="card">
+            <div className="card-head">
+              <h3>Editar alumno</h3>
+              <span className="chip">Rapido</span>
+            </div>
+            <form className="form" onSubmit={handleUpdateStudent}>
+              <label>Alumno</label>
+              <select value={selectedStudentEdit} onChange={(e) => setSelectedStudentEdit(e.target.value)}>
+                <option value="">Selecciona alumno</option>
+                {students.map((s) => (
+                  <option key={s._id} value={s._id}>{`${s.firstName} ${s.lastName}`}</option>
+                ))}
+              </select>
+              <label>Nombre</label>
+              <input type="text" value={editStudentFirst} onChange={(e) => setEditStudentFirst(e.target.value)} />
+              <label>Apellidos</label>
+              <input type="text" value={editStudentLast} onChange={(e) => setEditStudentLast(e.target.value)} />
+              <label>Codigo (opcional)</label>
+              <input
+                type="text"
+                value={editStudentCode}
+                onChange={(e) => setEditStudentCode(e.target.value)}
+                placeholder="Dejar vacio para mantener/generar"
+              />
+              <label>Estado</label>
+              <select value={editStudentStatus} onChange={(e) => setEditStudentStatus(e.target.value)}>
+                {studentStatuses.map((st) => (
+                  <option key={st} value={st}>{st}</option>
+                ))}
+              </select>
+              <button type="submit">Guardar cambios</button>
+            </form>
+          </section>
+        )}
 
-        <section className="card">
-          <div className="card-head">
-            <h3>Grupo</h3>
-            <span className="chip">Estructura</span>
-          </div>
-          <form className="form" onSubmit={handleCreateGroup}>
-            <label>Nombre</label>
-            <input type="text" required {...bindGroupName} />
-            <label>Grado (1-6)</label>
-            <input type="number" min="1" max="6" required {...bindGroupGrade} />
-            <label>Seccion</label>
-            <input type="text" {...bindGroupSection} />
-            <label>Ciclo escolar</label>
-            <input type="text" required {...bindGroupYear} />
-            <label>Tutor (opcional)</label>
-            <select {...bindGroupTutor}>
-              <option value="">Sin tutor</option>
-              {teacherUsers.map((t) => (
-                <option key={t._id} value={t._id}>{t.fullName}</option>
-              ))}
-            </select>
-            <button type="submit">Crear grupo</button>
-          </form>
-        </section>
+        {canManageStaff && (
+          <section className="card">
+            <div className="card-head">
+              <h3>Grupo</h3>
+              <span className="chip">Estructura</span>
+            </div>
+            <form className="form" onSubmit={handleCreateGroup}>
+              <label>Nombre</label>
+              <input type="text" required {...bindGroupName} />
+              <label>Grado (1-6)</label>
+              <input type="number" min="1" max="6" required {...bindGroupGrade} />
+              <label>Seccion</label>
+              <input type="text" {...bindGroupSection} />
+              <label>Ciclo escolar</label>
+              <input type="text" required {...bindGroupYear} />
+              <label>Tutor (opcional)</label>
+              <select {...bindGroupTutor}>
+                <option value="">Sin tutor</option>
+                {teacherUsers.map((t) => (
+                  <option key={t._id} value={t._id}>{t.fullName}</option>
+                ))}
+              </select>
+              <button type="submit">Crear grupo</button>
+            </form>
+          </section>
+        )}
 
         {canManageStaff && (
           <section className="card">
@@ -808,52 +841,56 @@ export default function AdminPanel() {
           </section>
         )}
 
-        <section className="card">
-          <div className="card-head">
-            <h3>Materia</h3>
-            <span className="chip">Docente y grado</span>
-          </div>
-          <form className="form" onSubmit={handleCreateSubject}>
-            <label>Nombre</label>
-            <input type="text" required {...bindSubjectName} />
-            <label>Codigo</label>
-            <input type="text" required {...bindSubjectCode} />
-            <label>Grado (opcional)</label>
-            <input type="number" min="1" max="6" {...bindSubjectGrade} />
-            <label>Docente (opcional)</label>
-            <select {...bindSubjectTeacher}>
-              <option value="">Sin docente</option>
-              {teacherUsers.map((t) => (
-                <option key={t._id} value={t._id}>{t.fullName}</option>
-              ))}
-            </select>
-            <button type="submit">Crear materia</button>
-          </form>
-        </section>
+        {canManageStaff && (
+          <section className="card">
+            <div className="card-head">
+              <h3>Materia</h3>
+              <span className="chip">Docente y grado</span>
+            </div>
+            <form className="form" onSubmit={handleCreateSubject}>
+              <label>Nombre</label>
+              <input type="text" required {...bindSubjectName} />
+              <label>Codigo</label>
+              <input type="text" required {...bindSubjectCode} />
+              <label>Grado (opcional)</label>
+              <input type="number" min="1" max="6" {...bindSubjectGrade} />
+              <label>Docente (opcional)</label>
+              <select {...bindSubjectTeacher}>
+                <option value="">Sin docente</option>
+                {teacherUsers.map((t) => (
+                  <option key={t._id} value={t._id}>{t.fullName}</option>
+                ))}
+              </select>
+              <button type="submit">Crear materia</button>
+            </form>
+          </section>
+        )}
 
-        <section className="card">
-          <div className="card-head">
-            <h3>Inscripcion</h3>
-            <span className="chip">Alumno a grupo</span>
-          </div>
-          <form className="form" onSubmit={handleCreateEnrollment}>
-            <label>Alumno</label>
-            <select {...bindEnrollmentStudent} required>
-              <option value="">Selecciona alumno</option>
-              {students.map((s) => (
-                <option key={s._id} value={s._id}>{`${s.firstName} ${s.lastName}`}</option>
-              ))}
-            </select>
-            <label>Grupo</label>
-            <select {...bindEnrollmentGroup} required>
-              <option value="">Selecciona grupo</option>
-              {selectableGroups.map((g) => (
-                <option key={g._id} value={g._id}>{g.name}</option>
-              ))}
-            </select>
-            <button type="submit">Inscribir</button>
-          </form>
-        </section>
+        {canManageStaff && (
+          <section className="card">
+            <div className="card-head">
+              <h3>Inscripcion</h3>
+              <span className="chip">Alumno a grupo</span>
+            </div>
+            <form className="form" onSubmit={handleCreateEnrollment}>
+              <label>Alumno</label>
+              <select {...bindEnrollmentStudent} required>
+                <option value="">Selecciona alumno</option>
+                {students.map((s) => (
+                  <option key={s._id} value={s._id}>{`${s.firstName} ${s.lastName}`}</option>
+                ))}
+              </select>
+              <label>Grupo</label>
+              <select {...bindEnrollmentGroup} required>
+                <option value="">Selecciona grupo</option>
+                {selectableGroups.map((g) => (
+                  <option key={g._id} value={g._id}>{g.name}</option>
+                ))}
+              </select>
+              <button type="submit">Inscribir</button>
+            </form>
+          </section>
+        )}
 
         <section className="card">
           <div className="card-head">
