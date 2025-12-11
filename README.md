@@ -1,151 +1,218 @@
 # Sistema de gestion escolar (API + frontend)
 
-Monorepo con dos aplicaciones:
-- `escuela_API`: backend REST con Node.js, Express y MongoDB.
+Monorepo compuesto por dos aplicaciones:
+- `escuela_API`: backend REST sobre Node.js, Express y MongoDB.
 - `proyecto-escuela`: frontend React que consume la API.
 
-## Estructura del repositorio
+La documentacion se divide en dos partes: **Guia para desarrolladores** y **Manual de usuario**.
 
+---
+
+## Guia para desarrolladores
+
+### Estructura del repositorio
 ```
 escuela_API/         # Backend
   src/
-    config/          # Env y conexion a MongoDB
+    config/          # Variables de entorno y conexion a MongoDB
     controllers/     # Logica de negocio por modulo
-    middlewares/     # Autenticacion, manejo de errores, etc.
+    middlewares/     # Autenticacion y manejo de errores
     models/          # Esquemas de Mongoose
-    routes/          # Agrupa endpoints bajo /api
+    routes/          # Endpoints agrupados bajo /api
     utils/           # Logger y helpers
-  tests/             # Pruebas Jest con mongodb-memory-server
+  tests/             # Pruebas Jest (mongodb-memory-server)
   package.json
 
 proyecto-escuela/    # Frontend React
   src/
-    componentes/     # Pantallas y vistas (Login, Dashboard, etc.)
+    componentes/     # Pantallas (Login, Dashboard, Asistencia, etc.)
     services/        # Cliente fetch hacia la API
   public/
   package.json
 
 .gitignore
 CREAR-USUARIO-ADMIN.md
-patch.diff           # Cambios previos de referencia (no usado en build)
+patch.diff
 ```
 
-Los scripts start-dev.bat y start-dev.ps1 se eliminaron por inestables; usa los comandos manuales siguientes.
+### Requisitos previos
+- Node.js 16+ y npm en PATH (`node -v`, `npm -v`).
+- MongoDB local accesible en `mongodb://127.0.0.1:27017/escuela_jose_minero`.
+- Dos terminales (una para backend y otra para frontend).
 
-## Requisitos
+Si MongoDB no esta corriendo, el backend no iniciara; arranca `mongod` antes de levantar servicios.
 
-- Node.js 16+ y npm.
-- MongoDB en localhost (por defecto `mongodb://127.0.0.1:27017/escuela_jose_minero`).
-- Dos terminales para correr backend y frontend en paralelo.
-
-## Configuracion rapida
-
-1) Backend (`escuela_API`)
+### Configuracion y ejecucion del backend (`escuela_API`)
+1) Instalar dependencias:
 ```
 cd escuela_API
 npm install
-copy .env.example .env   # En Linux/Mac usa: cp .env.example .env
 ```
-Variables recomendadas (`escuela_API/.env`):
+2) Crear `.env` desde el ejemplo:
+- Windows: `copy .env.example .env`
+- Linux/Mac: `cp .env.example .env`
+
+3) Valores recomendados (`escuela_API/.env`):
 ```
 PORT=4000
 MONGODB_URI=mongodb://127.0.0.1:27017/escuela_jose_minero
 JWT_SECRET=super-secret-key
 JWT_EXPIRES_IN=8h
 ```
+4) Ejecutar en desarrollo (con recarga):
+```
+npm run dev
+```
+5) Verificaciones:
+- Health: `http://localhost:4000/health`
+- API base: `http://localhost:4000/api`
 
-2) Frontend (`proyecto-escuela`)
+Produccion simple:
+```
+npm start
+```
+
+### Datos de ejemplo (seed)
+Para tener la base lista con usuarios, grupos, materias, tareas, asistencia y calificaciones:
+```
+cd escuela_API
+npm run seed
+```
+Esto:
+- Conecta a `MONGODB_URI`.
+- Crea/asegura admin `admin@escuela.com` / `admin123`.
+- Limpia colecciones academicas y las repuebla con datos coherentes.
+- Agrega usuarios: admin, direccion, maestro1, maestro2.
+- Crea grupos (1A, 2B, 3A), materias, alumnos inscritos, tareas, entregas, asistencia, participacion y calificaciones.
+
+Scripts relacionados:
+- `node seed-admin.js`: solo (re)crea el usuario admin.
+- `node seed-data.js`: alias directo al seed completo.
+
+### Configuracion y ejecucion del frontend (`proyecto-escuela`)
+1) Instalar dependencias:
 ```
 cd proyecto-escuela
 npm install
-copy .env.example .env   # En Linux/Mac usa: cp .env.example .env
 ```
-Variables recomendadas (`proyecto-escuela/.env`):
+2) Crear `.env` desde el ejemplo:
+- Windows: `copy .env.example .env`
+- Linux/Mac: `cp .env.example .env`
+
+3) Valores recomendados (`proyecto-escuela/.env`):
 ```
 REACT_APP_API_URL=http://localhost:4000
 ```
-
-## Como ejecutar
-
-- Servidor API (puerto 4000):
+4) Ejecutar en desarrollo:
 ```
-cd escuela_API
-npm run dev      # recarga con nodemon
-# npm start      # modo produccion simple
-```
-Health check: `http://localhost:4000/health`  
-Base API: `http://localhost:4000/api`
-
-- Frontend (puerto 3000):
-```
-cd proyecto-escuela
 npm start
 ```
-Abre `http://localhost:3000` en el navegador.
+Se sirve en `http://localhost:3000`.
 
-## Base de datos y datos de ejemplo
+### Flujo sugerido end-to-end
+1) Inicia MongoDB (`mongod`).  
+2) Ejecuta `npm run seed` en `escuela_API` (opcional pero recomendado).  
+3) Arranca backend con `npm run dev`.  
+4) Arranca frontend con `npm start`.  
+5) Ingresa al frontend con credenciales de ejemplo (ver Manual de usuario).  
 
-La API usa MongoDB. Para crear la base con datos coherentes usa el seed oficial:
+### Arquitectura rapida del backend
+- Express 5, Mongoose 8, JWT, bcryptjs, CORS.
+- Entrada: `src/server.js` monta `/api`, health check y manejo de errores global.
+- Rutas principales:
+  - `/auth` (login, registro)
+  - `/users`
+  - `/students`, `/groups`, `/subjects`, `/enrollments`
+  - `/tasks`, `/task-submissions`
+  - `/attendance`, `/participation`, `/grades`, `/reports`
+- Roles:
+  - `ADMIN`: acceso total.
+  - `DIRECTION`: gestiona lo academico, no usuarios.
+  - `TEACHER`: limitado a sus grupos/materias asignados.
+- Pruebas backend:
 ```
 cd escuela_API
-npm run seed           # Ejecuta reset-and-seed.js
+npm test
 ```
-Que hace `npm run seed`:
-- Conecta a `MONGODB_URI`.
-- Conserva o crea el admin `admin@escuela.com` (pass: `admin123`).
-- Limpia colecciones de alumnos, grupos, materias, tareas, calificaciones, asistencia, participacion y auditoria.
-- Inserta:
-  - Usuarios: admin, direccion, maestro1, maestro2.
-  - Grupos: 1A, 2B, 3A con tutores.
-  - Materias ligadas a docentes.
-  - Alumnos y sus inscripciones.
-  - Tareas, entregas, asistencia, calificaciones y participacion de ejemplo.
+(usa mongodb-memory-server, no toca tu base real).
 
-Otros scripts utiles en `escuela_API`:
-- `node seed-admin.js`: solo crea/recrea el usuario admin.
-- `node seed-data.js`: alias directo a `reset-and-seed.js`.
-
-## Detalles del backend (escuela_API)
-
-- Stack: Express 5, Mongoose 8, JWT, bcryptjs, CORS.
-- Punto de entrada: `src/server.js` monta `/api`, maneja errores y expone `/health`.
-- Modulos de rutas bajo `/api`:
-  - `/auth` login/registro.
-  - `/users` gestion de usuarios.
-  - `/students`, `/groups`, `/subjects`, `/enrollments`.
-  - `/tasks`, `/task-submissions`, `/attendance`, `/participation`, `/grades`, `/reports`.
-- Roles incorporados:
-  - `ADMIN`: acceso total.
-  - `DIRECTION`: gestiona catalogos y academico, no usuarios.
-  - `TEACHER`: limitado a sus grupos y materias asignadas.
-- Pruebas: `npm test` (usa mongodb-memory-server, sin tocar tu base real).
-
-## Detalles del frontend (proyecto-escuela)
-
-- Stack: React 18 con React Router, fetch nativo y servicios centralizados en `src/services`.
-- Flujo:
-  - `Login` guarda token JWT en localStorage.
-  - `LayoutPrincipal` protege rutas y muestra menu lateral.
-  - Vistas principales: `Dashboard` (estadisticas y reportes), `Asistencia` (resumen por grupo), `TareasCalificaciones` (tareas vs entregas), `AdminPanel` (operaciones CRUD completas para usuarios, alumnos, grupos, materias, inscripciones, tareas, asistencia y calificaciones).
+### Arquitectura rapida del frontend
+- React 18, React Router, servicios fetch en `src/services`.
+- Token JWT guardado en `localStorage`.
+- Componentes clave:
+  - `Login`: obtiene y guarda el token.
+  - `LayoutPrincipal`: protege rutas y muestra menu lateral.
+  - `Dashboard`: estadisticas y reporte general.
+  - `Asistencia`: resumen por grupo.
+  - `TareasCalificaciones`: tareas vs entregas y promedios.
+  - `AdminPanel`: gestion de usuarios, alumnos, grupos, materias, inscripciones, tareas, asistencia y calificaciones.
 - Scripts:
-  - `npm start` modo desarrollo.
-  - `npm run build` artefacto productivo en `build/`.
-  - `npm test` pruebas de CRA.
+```
+npm start       # dev server
+npm run build   # genera build en ./build
+npm test        # pruebas de CRA
+```
 
-## Probar inicio a fin
+### Solucion de problemas
+- Puerto 4000 o 3000 ocupado: libera procesos o ajusta los puertos en `.env` (backend) y `REACT_APP_API_URL` en el frontend.
+- MongoDB no conecta: confirma que `mongod` este activo y la URI sea correcta.
+- 401 o token invalido: vuelve a iniciar sesion; borra `localStorage` si persiste.
+- Cambios en `.env` no se reflejan: reinicia backend y frontend (CRA lee env al arrancar).
+- Nodemon no recarga: reinstala dependencias (`npm install` en backend) o usa `npm start`.
 
-1) Arranca MongoDB en local (`mongod`).
-2) Ejecuta el seed del backend.
-3) Inicia backend y frontend con los comandos anteriores.
-4) Ingresa en `http://localhost:3000` con alguno de estos usuarios:
-   - Admin: `admin@escuela.com` / `admin123`
-   - Direccion: `direccion@escuela.com` / `direccion123`
-   - Docentes: `maestro1@escuela.com` o `maestro2@escuela.com` / `maestro123`
+---
 
-## Notas y archivos utiles
+## Manual de usuario
 
-- `CREAR-USUARIO-ADMIN.md`: guia manual para crear el admin si prefieres no usar el seed.
-- Los archivos `.env` nunca se versionan; usa los `.env.example` como plantilla.
-- Si cambias puertos o `REACT_APP_API_URL`, mantelos alineados entre frontend y backend.
+### Acceso y requisitos
+- Navegador moderno (Chrome/Firefox/Edge).
+- URL de la aplicacion: `http://localhost:3000` (o la que exponga el despliegue).
+- Credenciales de ejemplo (seed):
+  - Admin: `admin@escuela.com` / `admin123`
+  - Direccion: `direccion@escuela.com` / `direccion123`
+  - Docentes: `maestro1@escuela.com` / `maestro123`, `maestro2@escuela.com` / `maestro123`
 
-Proyecto listo para publicarse en GitHub con pasos claros de instalacion, ejecucion y carga de datos.
+### Inicio de sesion
+1) Abre `http://localhost:3000`.
+2) Ingresa correo y contraseña.
+3) Si son validos, se guarda un token y accedes al dashboard.
+
+### Navegacion principal
+- **Dashboard**: resumen de tareas, alumnos, grupos y materias; boton para generar reporte (se muestra en consola del navegador).
+- **Asistencia**: selector de grupo; tabla con asistencias/faltas y porcentaje por alumno.
+- **Tareas y calificaciones**: selecciona materia; lista tareas con entregas, calificadas y promedio.
+- **Admin Panel**: disponible para admin/direccion/docentes (segun rol) para operar catalogos y registros.
+
+### Flujos basicos en Admin Panel
+- **Usuarios (ADMIN/DIRECTION)**: crear, editar rol/password, activar usuarios.
+- **Alumnos (ADMIN/DIRECTION)**: crear/editar alumno y estado.
+- **Grupos (ADMIN/DIRECTION)**: crear grupo, asignar tutor.
+- **Materias (ADMIN/DIRECTION)**: crear materia y asignar docente.
+- **Inscripciones (ADMIN/DIRECTION/TEACHER limitado a sus grupos)**: inscribir alumno a grupo.
+- **Tareas**: crear y editar (titulo, fecha, estado); docentes limitados a sus grupos/materias.
+- **Asistencia**: seleccionar grupo y marcar estatus por alumno; guardar registro diario.
+- **Calificar entregas**: filtrar por grupo/materia, seleccionar tarea, asignar estatus, puntaje y feedback por alumno; guardar.
+
+### Reportes y revisiones rapidas
+- Dashboard: muestra totales; reporte general aparece en consola del navegador al hacer clic en “Generar reporte”.
+- Asistencia: tabla resume asistencias y faltas por alumno del grupo seleccionado.
+- Tareas: tabla por materia con entregas, calificadas y promedio.
+
+### Mensajes y errores comunes
+- 401/403: token invalido o permisos insuficientes; vuelve a iniciar sesion o usa un rol con mas privilegios.
+- Validaciones: campos requeridos vacios o formatos incorrectos mostraran mensajes en pantalla.
+- Conexion fallida: confirma que el backend este activo en el puerto configurado y que `REACT_APP_API_URL` sea correcto.
+
+### Buenas practicas para uso diario
+- Mantener el rol adecuado para la tarea (por ejemplo, calificar con docente, no con direccion).
+- Actualizar el navegador si cambiaste la configuracion del backend o el puerto.
+- Regenerar datos con `npm run seed` solo cuando quieras un estado de demo limpio (elimina datos previos).
+
+---
+
+## Notas finales
+- No versionar archivos `.env`; usa `.env.example` como plantilla.
+- Si cambias la URL/puerto del backend, ajusta `REACT_APP_API_URL` y reinicia el frontend.
+- Para crear el admin manualmente puedes seguir `CREAR-USUARIO-ADMIN.md`; para la via rapida usa el seed.
+
+Documento listo para desarrolladores y usuarios finales, con pasos claros para instalar, ejecutar y operar el sistema. 
