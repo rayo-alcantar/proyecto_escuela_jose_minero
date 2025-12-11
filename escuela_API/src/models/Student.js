@@ -13,6 +13,12 @@ const studentSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
       unique: true,
+      sparse: true,
+      set: (val) => {
+        if (typeof val !== 'string') return undefined;
+        const normalized = val.trim();
+        return normalized.length === 0 ? undefined : normalized.toUpperCase();
+      },
     },
     birthDate: { type: Date },
     gender: {

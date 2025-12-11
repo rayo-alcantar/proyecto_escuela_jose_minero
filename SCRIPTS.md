@@ -13,7 +13,7 @@ Script principal de PowerShell con todas las validaciones y lógica de inicio.
 
 ### `start-dev.bat`
 Wrapper de Batch que permite ejecutar el script de PowerShell con doble clic.
-
+> Tip: ambos aceptan el switch `SeedData` para correr `npm run seed` en el backend antes de levantar servicios (ej. `.\start-dev.ps1 -SeedData` o `start-dev.bat SeedData`).
 ---
 
 ## 🚀 Uso

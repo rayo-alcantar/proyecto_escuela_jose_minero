@@ -4,6 +4,7 @@ import Dashboard from "./componentes/Dashboard/Dashboard";
 import Asistencia from "./componentes/Asistencia/Asistencia";
 import TareasCalificaciones from "./componentes/TareasCalificaciones/TareasCalificaciones";
 import LayoutPrincipal from "./componentes/LayoutPrincipal/LayoutPrincipal";
+import AdminPanel from "./componentes/AdminPanel/AdminPanel";
 import authService from "./services/authService";
 
 const PrivateRoute = ({ children }) => {
@@ -20,6 +21,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/asistencia" element={<Asistencia />} />
           <Route path="/calificaciones" element={<TareasCalificaciones />} />
+          <Route path="/admin" element={<AdminPanel />} />
         </Route>
       </Routes>
     </BrowserRouter>

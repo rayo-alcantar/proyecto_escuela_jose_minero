@@ -1,19 +1,19 @@
 /**
- * Servicio centralizado para comunicaci贸n con la API del backend.
- * Maneja todas las peticiones HTTP con configuraci贸n base y manejo de errores.
+ * Servicio centralizado para comunicaci髇 con la API del backend.
+ * Maneja todas las peticiones HTTP con configuraci髇 base y manejo de errores.
  */
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
 
 /**
- * Obtiene el token de autenticaci贸n del localStorage
+ * Obtiene el token de autenticaci髇 del localStorage
  */
 const getAuthToken = () => {
     return localStorage.getItem('token');
 };
 
 /**
- * M茅todo gen茅rico para hacer peticiones HTTP
+ * M閠odo gen閞ico para hacer peticiones HTTP
  * @param {string} endpoint - Endpoint de la API (sin el /api)
  * @param {object} options - Opciones de fetch
  * @returns {Promise<object>} Respuesta de la API
@@ -34,23 +34,26 @@ const request = async (endpoint, options = {}) => {
         config.headers['Authorization'] = `Bearer ${token}`;
     }
 
+    const response = await fetch(`${API_URL}${endpoint}`, config);
+    let data = null;
     try {
-        const response = await fetch(`${API_URL}${endpoint}`, config);
-        const data = await response.json();
+        data = await response.json();
+    } catch (_err) {
+        data = null;
+    }
 
-        if (!response.ok) {
-            throw new Error(data.message || 'Error en la petici贸n');
-        }
-
-        return data;
-    } catch (error) {
-        console.error('API Error:', error);
+    if (!response.ok) {
+        const error = new Error((data && data.message) || 'Error en la petici髇');
+        error.status = response.status;
+        error.details = data;
         throw error;
     }
+
+    return data;
 };
 
 /**
- * M茅todos HTTP
+ * M閠odos HTTP
  */
 const apiService = {
     get: (endpoint) => request(endpoint, { method: 'GET' }),

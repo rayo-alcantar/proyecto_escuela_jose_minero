@@ -11,6 +11,7 @@ function LayoutPrincipal() {
           <li><Link to="/dashboard">Dashboard</Link></li>
           <li><Link to="/asistencia">Asistencia</Link></li>
           <li><Link to="/calificaciones">Tareas y calificaciones</Link></li>
+          <li><Link to="/admin">Panel admin</Link></li>
         </ul>
       </nav>
 

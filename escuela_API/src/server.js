@@ -42,6 +42,8 @@ const startServer = async () => {
   });
 };
 
-startServer();
+if (env.env !== 'test') {
+  startServer();
+}
 
 module.exports = app;

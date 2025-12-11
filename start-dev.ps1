@@ -1,4 +1,7 @@
 #!/usr/bin/env pwsh
+param(
+    [switch]$SeedData
+)
 <#
 .SYNOPSIS
     Script de inicio para el Sistema de Gestion Escolar (Monorepo)
@@ -9,8 +12,14 @@
     como el frontend en modo desarrollo. Al cerrar este script, mata
     automaticamente todos los procesos hijos.
 
+    Parámetros:
+      -SeedData : Ejecuta `npm run seed` en el backend antes de iniciar servicios.
+
 .EXAMPLE
     .\start-dev.ps1
+
+.EXAMPLE
+    .\start-dev.ps1 -SeedData
 #>
 
 # ============================================
@@ -143,7 +152,7 @@ function Stop-AllProcesses {
                 $process = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
                 if ($process) {
                     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-                    Write-Info "Proceso en puerto $port detenido"
+                    Write-Info "Proceso en puerto $port detenido (PID $($process.Id))"
                 }
             }
             catch {
@@ -353,11 +362,24 @@ Write-Step "5. Verificando disponibilidad de puertos"
 
 Write-Info "Verificando puerto $BACKEND_PORT (Backend)..."
 if (Test-PortInUse $BACKEND_PORT) {
-    Write-Warning "El puerto $BACKEND_PORT ya esta en uso"
-    Write-Info "Es posible que el backend ya este corriendo"
-    $continue = Read-Host "Deseas continuar de todas formas? (s/n)"
-    if ($continue -ne "s" -and $continue -ne "S") {
-        exit 0
+    Write-Warning "El puerto $BACKEND_PORT ya esta en uso. Se intentara liberar automaticamente."
+    $connections = Get-NetTCPConnection -LocalPort $BACKEND_PORT -ErrorAction SilentlyContinue
+    foreach ($conn in $connections) {
+        try {
+            $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+            if ($proc) {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                Write-Success "Proceso liberado en puerto $BACKEND_PORT (PID $($proc.Id))"
+            }
+        }
+        catch {
+            Write-Warning "No se pudo detener el proceso en $BACKEND_PORT. Cierra procesos manualmente e intenta de nuevo."
+            Stop-OnError $_
+        }
+    }
+    Start-Sleep -Seconds 1
+    if (Test-PortInUse $BACKEND_PORT) {
+        Stop-OnError "El puerto $BACKEND_PORT sigue ocupado. Cancela y libera el puerto antes de continuar."
     }
 }
 else {
@@ -366,11 +388,24 @@ else {
 
 Write-Info "Verificando puerto $FRONTEND_PORT (Frontend)..."
 if (Test-PortInUse $FRONTEND_PORT) {
-    Write-Warning "El puerto $FRONTEND_PORT ya esta en uso"
-    Write-Info "Es posible que el frontend ya este corriendo"
-    $continue = Read-Host "Deseas continuar de todas formas? (s/n)"
-    if ($continue -ne "s" -and $continue -ne "S") {
-        exit 0
+    Write-Warning "El puerto $FRONTEND_PORT ya esta en uso. Se intentara liberar automaticamente."
+    $connections = Get-NetTCPConnection -LocalPort $FRONTEND_PORT -ErrorAction SilentlyContinue
+    foreach ($conn in $connections) {
+        try {
+            $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+            if ($proc) {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                Write-Success "Proceso liberado en puerto $FRONTEND_PORT (PID $($proc.Id))"
+            }
+        }
+        catch {
+            Write-Warning "No se pudo detener el proceso en $FRONTEND_PORT. Cierra procesos manualmente e intenta de nuevo."
+            Stop-OnError $_
+        }
+    }
+    Start-Sleep -Seconds 1
+    if (Test-PortInUse $FRONTEND_PORT) {
+        Stop-OnError "El puerto $FRONTEND_PORT sigue ocupado. Cancela y libera el puerto antes de continuar."
     }
 }
 else {
@@ -378,10 +413,32 @@ else {
 }
 
 # ============================================
+# Seed de datos opcional
+# ============================================
+
+if ($SeedData) {
+    Write-Step "6. Ejecutando seed de datos en el backend"
+    try {
+        Push-Location $BACKEND_DIR
+        npm run seed
+        Pop-Location
+        Write-Success "Seed ejecutado correctamente"
+    }
+    catch {
+        Pop-Location
+        Stop-OnError "Fallo la ejecucion del seed: $_"
+    }
+}
+
+# ============================================
 # Iniciar Servicios
 # ============================================
 
-Write-Step "6. Iniciando servicios"
+if ($SeedData) {
+    Write-Step "7. Iniciando servicios"
+} else {
+    Write-Step "6. Iniciando servicios"
+}
 
 Write-Info "Iniciando Backend (Puerto $BACKEND_PORT)..."
 $backendPath = Join-Path $PWD $BACKEND_DIR

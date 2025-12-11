@@ -83,7 +83,12 @@ const createStudent = async (req, res) => {
       return errorResponse(res, `Campos requeridos: ${missing.join(', ')}`, 400);
     }
 
-    const student = await Student.create(req.body);
+    const payload = { ...req.body };
+    if (!payload.studentCode || String(payload.studentCode).trim() === '') {
+      delete payload.studentCode; // evita valores vacíos que chocan con el índice único
+    }
+
+    const student = await Student.create(payload);
 
     await logAudit({
       action: 'STUDENT_CREATE',
