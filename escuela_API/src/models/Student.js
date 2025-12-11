@@ -41,5 +41,14 @@ const studentSchema = new mongoose.Schema(
 );
 
 studentSchema.index({ firstName: 1, lastName: 1 });
+studentSchema.pre('save', function autoCode(next) {
+  if (!this.studentCode) {
+    const random = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, '0');
+    this.studentCode = `STU-${Date.now().toString().slice(-4)}${random}`;
+  }
+  next();
+});
 
 module.exports = mongoose.model('Student', studentSchema);
