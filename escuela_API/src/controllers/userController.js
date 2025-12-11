@@ -94,7 +94,7 @@ const getUserById = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { fullName, role, isActive, password } = req.body;
+    const { fullName, role, isActive, password, email } = req.body;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return errorResponse(res, 'Identificador inválido', 400);
     }
@@ -112,6 +112,14 @@ const updateUser = async (req, res) => {
     if (password) {
       // Se mantiene consistencia usando el campo passwordHash tambien desde el panel de admin
       updatePayload.passwordHash = await bcrypt.hash(password, 10);
+    }
+    if (email) {
+      const normalizedEmail = String(email).trim().toLowerCase();
+      const existing = await User.findOne({ email: normalizedEmail, _id: { $ne: id } });
+      if (existing) {
+        return errorResponse(res, 'El correo ya esta registrado', 409);
+      }
+      updatePayload.email = normalizedEmail;
     }
 
     const user = await User.findByIdAndUpdate(id, updatePayload, {
